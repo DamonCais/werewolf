@@ -1,0 +1,603 @@
+<wxs module="m1" lang="babel">
+const getTime = (time) => {
+  let date = getDate(time);
+  let hour = date.getHours();
+  let mins = date.getMinutes();
+  let sec = date.getSeconds();
+  let milli = date.getMilliseconds();
+  return `${hour}:${mins}`;
+}
+module.exports.getTime = getTime;
+</wxs>
+
+
+<template>
+  <div class="flex flex-direction" style="height:100vh;padding-bottom: 100rpx;">
+    <cu-custom :bgColor="bgColor" :Custom="Custom" :CustomBar="CustomBar" :StatusBar="StatusBar" isBack="{{true}}">
+      <view slot="backText">返回</view>
+      <view slot="content">狼人真言</view>
+    </cu-custom>
+    <view class="cu-bar bg-white solid-bottom sticky" style="top:{{CustomBar}}px;">
+      <view class="action">
+        <text class="cuIcon-title text-orange"></text> 房间号:{{roomId}}
+        <text class="text-red text-sm margin-lr">({{onLine?'在线':'离线'}})</text>
+      </view>
+      <view class="action">
+        <button class="cu-btn bg-green shadow" @tap="modalName='DrawerModalR'">房间信息</button>
+      </view>
+    </view>
+    <scroll-view style="flex:1;overflow-y:auto;padding:0 0 20rpx 0;" scroll-y scroll-into-view="main-{{MainCur}}" scroll-with-animation>
+      <view class="cu-chat">
+        <block v-for="(content,i) in contents" :key="i">
+          <view id="main-{{i}}" v-if="content.type=='DISCUSS'||content.type=='QUEST'" class="cu-item animation-slide-left">
+            <view class="cu-avatar radius" style="background-image:url({{content.userId.avatarUrl}});"></view>
+            <view class="main ">
+              <view class="content shadow {{content.type=='QUEST'?'bg-brown light':''}}">
+                {{content.content}}
+              </view>
+              <view v-if="content.type=='QUEST'" class="action {{answerClass[content.answer]}}">
+                <text @tap="answerQuest(content.contentId,content.answer)" class="text margin-left-sm">{{answerText[content.answer]}}</text>
+              </view>
+              <view class="nickName text-sm">{{content.userId.nickName}}</view>
+            </view>
+          </view>
+          <view id="main-{{i}}" class="cu-info" v-else-if="content.type==='DATE'">
+            {{content.content}}
+          </view>
+          <view id="main-{{i}}" v-else-if="content.type=='VOTE'" class="cu-item">
+            <view class="flex align-center">
+              <view class="cu-avatar radius" style="background-image:url({{content.userId.avatarUrl}});"></view>
+              <view>{{content.userId.nickName}}</view>
+              <view class="padding-lr-lg">投了</view>
+              <view class="cu-avatar radius" style="background-image:url({{content.to.avatarUrl}});"></view>
+              <view>{{content.to.nickName}}</view>
+            </view>
+          </view>
+        </block>
+      </view>
+    </scroll-view>
+    <!-- 输入窗口 -->
+    <view v-if="isPlayer&&roomStatus!='FINISH'" class="cu-bar foot input {{InputBottom!=0?'cur':''}}" style="bottom:{{InputBottom}}px">
+      <view @tap="toggleQuest" class="action">
+        <text class="text-green">{{isQuest?'提问':'发言'}}</text>
+      </view>
+      <input @confirm="sendMsg" class="solid-bottom" @focus="InputFocus" @blur="InputBlur" adjust-position="{{false}}" focus="{{false}}" maxlength="300" cursor-spacing="10" v-model="msg"></input>
+      <button @tap="sendMsg" class="cu-btn bg-green shadow">发送</button>
+    </view>
+    <!-- 房间信息 -->
+    <view class="cu-modal drawer-modal justify-end {{modalName=='DrawerModalR'?'show':''}}" @tap="modalName=''">
+      <view class="cu-dialog basis-xl" catchtap style="top:{{CustomBar}}px;height:calc(100vh - {{CustomBar}}px)">
+        <view class="flex flex-direction   padding-tb" style="height:100%">
+          <view class="cu-list menu text-left" style="height:60%;overflow-y:auto;">
+            <view v-for="(user,j) in roomInfo.openIds" :key="j" class="cu-item">
+              <view class="cu-avatar round" style="background-image:url({{user.avatarUrl}});"></view>
+              <view class="content">
+                <text class="text-cut" style="max-width:200rpx;">{{user.nickName}}</text>
+              </view>
+              <view v-if="isAdmin&&roomStatus=='NEW'" @tap="kickUser(user._id)" class="action text-red">
+                {{userInfo.openId === user.openId?'退出':'踢出'}}
+              </view>
+              <view v-else-if="roomStatus=='FINISH'" class="action text-blue">
+                {{user.roleName}}
+              </view>
+            </view>
+          </view>
+          <view class="cu-bar solid-bottom margin-top">
+            <view class="action">
+              您的身份:
+            </view>
+            <view class="action">
+              {{roleName}}
+            </view>
+          </view>
+          <view class="cu-bar solid-bottom">
+            <view class="action">
+              咒语:
+            </view>
+            <view class="action">
+              {{showKeyWord}}
+            </view>
+          </view>
+          <view class="cu-bar ">
+            <view class="action">
+              自动滚动
+            </view>
+            <view class="action">
+              <switch style="transform:scale(0.6)" class="orange radius sm" v-model="autoScroll"></switch>
+            </view>
+          </view>
+          <view v-if="isAdmin&&roomStatus=='NEW'" class="padding">
+            <view @tap="startGame" class="text-cut padding bg-green radius">
+              开始游戏
+            </view>
+          </view>
+          <view v-else-if="roomStatus=='NEW'" class="padding">
+            <view @tap="kickUser(userInfo._id)" class="text-cut padding bg-red radius">
+              退出房间
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+    <!-- 选词窗口 -->
+    <view class="cu-modal {{isHeader&&roomStatus=='PICKING'?'show':''}}">
+      <view class="cu-dialog padding-sm" catchtap>
+        <radio-group v-model="keyWord" class="block">
+          <view class="cu-list menu text-left">
+            <view class="cu-item" v-for="(word,i) in roomInfo.words" :key="i">
+              <label class="flex justify-between align-center flex-sub">
+                            <view class="flex-sub">{{word}}</view>
+                            <radio class="round" value="{{word}}"></radio>
+                          </label>
+            </view>
+          </view>
+          <view class="flex flex-direction padding ">
+            <button @tap="pickWord" class="cu-btn bg-green">确认</button>
+          </view>
+        </radio-group>
+      </view>
+    </view>
+    <!-- 选词loading -->
+    <view class='cu-load load-modal' wx:if="{{!isHeader&&roomStatus=='PICKING'}}">
+      <!-- <view class='cuIcon-emojifill text-orange'></view> -->
+      <image src='/images/logo.png' class='png' mode='aspectFit'></image>
+      <view class='gray-text'>选词中...</view>
+    </view>
+    <!-- 回答 -->
+    <view class="cu-modal bottom-modal {{modalName=='ChooseModal'?'show':''}}" @tap="modalName=''">
+      <view class="cu-dialog" catchtap>
+        <view class="cu-bar bg-white">
+          <view class="action text-blue" @tap="modalName=''">取消</view>
+          <view class="action text-green" @tap="confirmChoose">确定</view>
+        </view>
+        <view class="grid col-3 padding-sm">
+          <view v-for="i in 6" :key="i" class="padding-xs">
+            <button disabled="{{!checkBoxCount[i]}}" @tap="answerObj.answer=i" class="cu-btn orange lg block {{answerObj.answer==i?'bg-orange':'line-orange'}}"> 
+                      {{checkBox[i]}}
+                      <view class="cu-tag sm round {{answerObj.answer==i?'bg-white text-orange':'bg-orange'}}">
+                        {{checkBoxCount[i]}}
+                      </view>
+                    </button>
+          </view>
+        </view>
+      </view>
+    </view>
+    <!-- 投票 -->
+    <view hidden="{{!canVote||voteEd||roomStatus!='VOTEING'}}" class="home-vote">
+      <button @tap="modalName='VoteModal'" class="cu-btn lg bg-blue icon">
+                {{roomInfo.getAnswer?'指刀':'投票'}}
+              </button>
+    </view>
+    <!-- 投票窗口 -->
+    <view class="cu-modal {{modalName=='VoteModal'?'show':''}}" @tap="modalName=''">
+      <view class="cu-dialog padding-sm" catchtap>
+        <radio-group v-model="voteId" class="block">
+          <view class="cu-list menu text-left">
+            <view class="cu-item" v-for="(user,j) in roomInfo.openIds" :key="j">
+              <label class="flex justify-between align-center flex-sub">
+                      <view class="flex-sub">
+                          <view class="cu-avatar round" style="background-image:url({{user.avatarUrl}});"></view>
+                         <text class="text-cut" style="max-width:200rpx;">{{user.nickName}}</text>
+                      </view>
+                      <radio class="round" value="{{user._id}}"></radio>
+                    </label>
+            </view>
+          </view>
+          <view class="flex flex-direction padding ">
+            <button @tap="pushVote" class="cu-btn bg-green">确认</button>
+          </view>
+        </radio-group>
+      </view>
+    </view>
+    <!-- 票数统计 -->
+    <view hidden="{{ roomStatus=='NEW'}}" class="vote-count flex flex-direction">
+      <view v-for="(an,i) in answerCountText" :key="i" class="cu-capsule">
+        <view class="cu-tag bg-{{an.color}} ">
+          {{an.text}}
+        </view>
+        <view class="cu-tag line-{{an.color}}">
+          {{checkBoxCount[i+1]}}
+        </view>
+      </view>
+    </view>
+  </div>
+</template>
+
+<script>
+  import wepy from '@wepy/core';
+  import io from '@/socket/weapp.socket.io.js';
+  import api from '@/api/api';
+  import global from '@/mixins/global';
+  import _ from '@/utils/lodash';
+  import {
+    answerClass,
+    answerText,
+    checkBox,
+    answerCountText
+  } from './constant.js'
+  import {
+    setRoleName
+  } from './util.js'
+  wepy.page({
+    mixins: [global],
+    async onLoad({
+      roomId
+    }) {
+      this.roomId = roomId || 1;
+      await this.getRoomInfo();
+      await this.getContents();
+      if (_.get(this.roomInfo, 'status') !== 'FINISH') {
+        this.createConnect();
+        this.isOnload = false;
+      }
+    },
+    async onShow() {
+      if (_.get(this.roomInfo, 'status') !== 'FINISH' && !this.isOnload) {
+        await this.getRoomInfo();
+        await this.getContents();
+        this.createConnect();
+      }
+    },
+    onHide() {
+      this.closeConnect();
+    },
+    async onUnload() {
+      this.closeConnect();
+    },
+    computed: {
+      canVote() {
+        if (_.get(this.roomInfo, 'getAnswer')) {
+          return this.isWolf
+        } else {
+          return true;
+        }
+      },
+      voteEd() {
+        let votes = _.get(this.roomInfo, 'votes') || [];
+        return votes.findIndex(v => v.from === this.userInfo._id) != -1;
+      },
+      isAdmin() {
+        return _.get(this.roomInfo, 'openIds.0.openId') === _.get(this.userInfo, 'openId')
+      },
+      roomStatus() {
+        return _.get(this.roomInfo, 'status') || 'NEW'
+      },
+      isPlayer() {
+        let openIds = _.get(this.roomInfo, 'openIds') || [];
+        let index = openIds.findIndex(o => o.openId == _.get(this.userInfo, 'openId'))
+        return index > -1
+      },
+      isWolf() {
+        let wolfs = _.get(this.roomInfo, 'wolf') || [];
+        return wolfs.findIndex(o => o == _.get(this.userInfo, '_id')) > -1
+      },
+      isProphet() {
+        return _.get(this.roomInfo, 'prophet') === _.get(this.userInfo, '_id')
+      },
+      isHeader() {
+        return _.get(this.roomInfo, 'header') === _.get(this.userInfo, '_id')
+      },
+      roleName() {
+        let str = [];
+        this.isHeader ? str.push('村长') : '';
+        this.isWolf ? str.push('狼人') : '';
+        this.isProphet ? str.push('先知') : '';
+        str = str.length ? str : ['村民'];
+        return str.join(',')
+      },
+      showKeyWord() {
+        if (this.isHeader || this.isWolf || this.isProphet || this.roomStatus == 'FINISH') {
+          return _.get(this.roomInfo, 'keyWord')
+        } else {
+          return '未知'
+        }
+      },
+    },
+    data: {
+      onLine:false,
+      isOnload: true,
+      autoScroll:true,
+      modalName: null,
+      roomId: '',
+      MainCur: 0,
+      InputBottom: 0,
+      msg: '',
+      isQuest: false,
+      contents: [],
+      roomInfo: {},
+      answerClass,
+      answerText,
+      answerObj: {
+        contentId: '',
+        answer: null,
+      },
+      checkVal: null,
+      checkBox,
+      answerCountText,
+      checkBoxCount: {
+        '0': 36,
+        '1': 36,
+        '2': 10,
+        '3': 1,
+        '4': 1,
+        '5': 1
+      },
+      keyWord: '',
+      voteId: '',
+    },
+    methods: {
+      sendMsg() {
+        if (!this.msg.trim()) {
+          return;
+        }
+        let content = {
+          type: this.isQuest ? 'QUEST' : 'DISCUSS',
+          roomId: this.roomId,
+          userId: this.userInfo._id,
+          content: this.msg,
+        }
+        this.socket.emit('chat', content);
+        this.msg = '';
+      },
+      async getContents() {
+        let res = await api.get('getContents', {
+          roomId: this.roomId
+        });
+        this.contents = res.data;
+        this.msgScroll()
+        this.caclCheckNum();
+      },
+      updateAnswer(answer) {
+        let content = this.contents[answer.contentId]
+        content.answer = answer.answer;
+        this.contents.splice(answer.contentId, 1, content);
+        this.caclCheckNum();
+      },
+      async getChat(msg) {
+        if (_.get(msg, '0.contentId') || 0 === this.contents.length) {
+          this.contents = this.contents.concat(msg)
+        } else {
+          await this.getContents();
+        }
+        this.msgScroll()
+        this.caclCheckNum();
+      },
+      msgScroll(){
+        if(this.autoScroll){
+          this.MainCur = this.contents.length - 1
+        }
+      },
+      async answerQuest(contentId,answer) {
+        if (this.isHeader&&answer=='NEW'&&this.roomStatus==='PLAYING') {
+          this.answerObj.contentId = contentId;
+          this.modalName = 'ChooseModal';
+        }
+      },
+      async confirmChoose() {
+        if(this.answerObj.answer===null){
+          return
+        }
+        let obj = Object.assign({
+          roomId: this.roomId
+        }, this.answerObj);
+        let res = await api.get('answerQuest', obj);
+        this.answerObj = {
+          contentId: '',
+          answer: null
+        }
+        this.modalName = null;
+      },
+      async kickUser(userId) {
+        this.socket.emit('kick', userId)
+        if (userId === this.userInfo._id) {
+          await this.closeConnect();
+          wx.navigateBack(-1);
+        }
+      },
+      async pickWord() {
+        let res = await api.get('pickWord', {
+          roomId: this.roomId,
+          word: this.keyWord
+        });
+      },
+      async pushVote() {
+        if (!this.voteId) return;
+        let res = await api.get('pushVote', {
+          roomId: this.roomId,
+          from: this.userInfo._id,
+          to: this.voteId
+        })
+        await this.getRoomInfo();
+        this.modalName = '';
+      },
+      async startGame() {
+        let res = await api.get('startGame', {
+          roomId: this.roomId
+        });
+      },
+      async getRoomInfo() {
+        let res = await api.post('getRooms', {
+          roomId: this.roomId
+        });
+        let roomInfo = _.get(res, 'data.0') || {}
+        this.roomInfo = setRoleName(roomInfo)
+        if (this.roomInfo != 'PLAYING') {
+          this.isQuest = false;
+        }
+      },
+      caclCheckNum() {
+        let questArr = this.contents.filter(c => c.type === 'QUEST');
+        let checkBoxCount = {
+          '0': 36,
+          '1': 36,
+          '2': 10,
+          '3': 1,
+          '4': 1,
+          '5': 1
+        };
+        questArr.forEach(element => {
+          switch (element.answer) {
+            case 'YES':
+              checkBoxCount[0]--;
+              checkBoxCount[1]--;
+              break;
+            case 'NO':
+              checkBoxCount[0]--;
+              checkBoxCount[1]--;
+              break;
+            case 'MAYBE':
+              checkBoxCount[2]--;
+              break;
+            case 'CLOSED':
+              checkBoxCount[3]--;
+              break;
+            case 'UNCLOSED':
+              checkBoxCount[4]--;
+              break;
+            case 'RIGHT':
+              checkBoxCount[5]--;
+              break;
+          }
+        });
+        this.checkBoxCount = checkBoxCount;
+      },
+      toggleQuest() {
+        if (this.roomStatus === 'PLAYING' && this.isPlayer && !this.isHeader) {
+          this.isQuest = !this.isQuest
+        }
+      },
+      InputFocus(e) {
+        this.InputBottom = e.$wx.detail.height;
+      },
+      InputBlur(e) {
+        this.InputBottom = 0;
+      },
+      async closeConnect() {
+        try {
+          let res = await this.socket.close();
+          console.log(res)
+        } catch (error) {
+          console.log(error);
+        }
+      },
+      createConnect() {
+        const socket = (this.socket = io('https://www.jycais.cn', {
+          // 实际使用中可以在这里传递参数
+          query: {
+            room: this.roomId,
+            userId: this.userInfo.openId
+          },
+          reconnect: false,
+          'auto connect': false,
+          transports: ['websocket']
+        }));
+        socket.on('connect', () => {
+          const id = socket.id;
+          this.onLine = true;
+          console.log('connect', id);
+        });
+        socket.on('chat', msg => {
+          console.log('#receive,', msg);
+          this.getChat(msg);
+        });
+        // 接收在线用户信息
+        socket.on('update', msg => {
+          this.getRoomInfo();
+          console.log('#update,', msg);
+        });
+        socket.on('updateAnswer', answer => {
+          this.updateAnswer(answer);
+          console.log('#updateAnswer,', answer);
+        });
+        // 系统事件
+        socket.on('disconnect', msg => {
+          this.onLine = false;
+          console.log('#disconnect', msg);
+        });
+        socket.on('disconnecting', () => {
+          console.log('#disconnecting');
+        });
+        socket.on('error', () => {
+          console.log('#error');
+        });
+      },
+    }
+  });
+</script>
+
+<style lang="less">
+  page {
+    // padding-bottom: 100rpx;
+  }
+  .sticky {
+    /* height: 92rpx; */
+    position: sticky;
+    position: -webkit-sticky;
+    /*  */
+    z-index: 1000;
+  }
+  .cu-chat {
+    .cu-item {
+      padding: 30rpx 20rpx 10rpx;
+      >.main {
+        width: 80%;
+        max-width: 80%;
+        position: relative;
+        margin: 30rpx 110rpx 0 40rpx!important;
+        .content {
+          word-break: break-word;
+          &::after {
+            left: -10rpx!important;
+          }
+        }
+        .nickName {
+          position: absolute;
+          top: -30rpx;
+          left: 0;
+          right: 0;
+          line-height: 30rpx;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+      .action {
+        padding: 0 0 0 10rpx;
+      }
+    }
+  }
+  .cu-bar {
+    height: 100rpx;
+  }
+  .NEW {
+    background-color: #f0f0f0!important;
+  }
+  .YES {
+    background: green;
+  }
+  .home-vote {
+    position: fixed;
+    right: 40rpx;
+    bottom: 180rpx;
+  }
+  .vote-count {
+    position: fixed;
+    right: 10rpx;
+    top: 35%;
+  }
+  .cu-tag {
+    width: 60rpx;
+  }
+  .cu-capsule+.cu-capsule {
+    margin-left: 0!important;
+  }
+</style>
+  
+
+<config>
+{
+    navigationBarTitleText: 'WePY 2.0 Feature Demo',
+    usingComponents: {
+    }
+}
+</config>

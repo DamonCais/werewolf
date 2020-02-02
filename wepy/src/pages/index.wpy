@@ -1,0 +1,104 @@
+
+<template>
+  <div class="bg-gray">
+    <cu-custom :bgColor="bgColor" :Custom="Custom" :CustomBar="CustomBar" :StatusBar="StatusBar">
+      <view slot="content">狼人真言</view>
+    </cu-custom>
+    <button class="bg-gray btn-noborder" open-type="getUserInfo" bindgetuserinfo="onGotUserInfo">
+      <view>
+        <view class="cu-avatar round lg margin-left" style="background-image:url({{avatarUrl}});">
+          <view
+            class="cu-tag badge {{currentUserInfo.gender!=1?'cuIcon-female bg-pink':'cuIcon-male bg-blue'}}"
+          ></view>
+        </view>
+        <view>{{currentUserInfo.nickName||'点击授权'}}</view>
+      </view>
+    </button>
+    <div class="padding-xl flex flex-direction align-center">
+      <button
+        style="width:300rpx;"
+        open-type="getUserInfo"
+        bindgetuserinfo="tapRoom"
+        class="cu-btn bg-red round lg shadow margin-bottom"
+      >房间列表</button>
+      <button style="width:300rpx;" class="cu-btn line-red round lg shadow">游戏介绍</button>
+    </div>
+  </div>
+</template>
+
+<script>
+import wepy from '@wepy/core';
+import global from '@/mixins/global';
+import api from '@/api/api';
+wepy.page({
+  mixins: [global],
+  onLoad({ id }) {
+    console.log('onload', id);
+  },
+  computed: {
+    avatarUrl() {
+      return this.currentUserInfo.avatarUrl;
+    }
+  },
+  data: {
+    currentUserInfo: {}
+  },
+  async created() {
+    let login = await wepy.wx.login();
+    let res = {};
+    try {
+      res = await wepy.wx.getUserInfo({
+        withCredentials: true
+      });
+    } catch (error) {
+      res = {
+        userInfo: {}
+      };
+    }
+    let obj = Object.assign(res.userInfo, {
+      js_code: login.code
+    });
+    let result = await api.post('code2session', obj);
+    this.$app.$options.globalData.userInfo = result.data;
+    this.currentUserInfo = result.data;
+  },
+  methods: {
+    async onGotUserInfo(e) {
+      let { detail } = e.$wx;
+      if (detail.errMsg == 'getUserInfo:ok') {
+        let login = await wepy.wx.login();
+        let obj = Object.assign(detail.userInfo, {
+          js_code: login.code
+        });
+        let result = await api.post('code2session', obj);
+        this.$app.$options.globalData.userInfo = result.data;
+      } else {
+        console.log('deny');
+      }
+    },
+    async tapRoom(e) {
+      this.onGotUserInfo(e);
+      wx.navigateTo({
+        url: '/pages/list/index'
+      });
+    }
+  }
+});
+</script>
+<style lang="less">
+.btn-noborder {
+  &::after {
+    border: none !important;
+  }
+  border: none !important;
+  outline: none !important;
+}
+</style>
+
+<config>
+{
+    usingComponents: {
+      "cu-custom": '~@/components/custom',
+    }
+}
+</config>

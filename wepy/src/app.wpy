@@ -1,0 +1,85 @@
+<style lang="less">
+@import './colorui/app.wxss';
+</style>
+
+<script>
+import wepy from '@wepy/core';
+import eventHub from './common/eventHub';
+import vuex from '@wepy/x';
+import promisify from '@wepy/use-promisify';
+
+wepy.use(promisify);
+wepy.use(vuex);
+wepy.app({
+  hooks: {
+    // App 级别 hook，对整个 App 生效
+    // 同时存在 Page hook 和 App hook 时，优先执行 Page hook，返回值再交由 App hook 处
+    'before-setData': function(dirty) {
+      console.log('setData dirty: ', dirty);
+      return dirty;
+    }
+  },
+  globalData: {
+    userInfo: {},
+    bgColor: 'bg-gradual-blue',
+    bgClass: '',
+    StatusBar: 0
+  },
+  onLaunch() {
+    wx.getSystemInfo({
+      success: e => {
+        this.$options.globalData.StatusBar = e.statusBarHeight;
+        this.$options.globalData.windowHeight = e.windowHeight;
+        let custom = wx.getMenuButtonBoundingClientRect();
+        console.log(custom);
+        this.$options.globalData.bgColor = 'bg-red';
+        this.$options.globalData.Custom = custom;
+        if (custom.top && custom.bottom) {
+          this.$options.globalData.CustomBar =
+            custom.bottom + custom.top - e.statusBarHeight;
+        } else {
+          this.$options.globalData.CustomBar = e.windowHeight / 10;
+        }
+      }
+    });
+  },
+  methods: {
+    login() {},
+    sleep(s) {
+      return new Promise((resolve, reject) => {
+        setTimeout(() => {
+          resolve('promise resolved');
+        }, s * 1000);
+      });
+    },
+    async testAsync() {
+      let d = await this.sleep(3);
+      console.log(d);
+    }
+  }
+});
+</script>
+
+<config>
+{
+    pages: [
+      'pages/index',
+      'pages/list/index',
+      'pages/home/index',
+            'pages/test',
+      'pages/room/index',
+
+    ],
+    usingComponents: {
+      "cu-custom": 'components/custom',
+
+    },
+    window: {
+      backgroundTextStyle: 'light',
+      navigationBarBackgroundColor: '#fff',
+      navigationBarTitleText: 'WeChat',
+      navigationBarTextStyle: 'black',
+      navigationStyle: 'custom'
+    }
+}
+</config>
