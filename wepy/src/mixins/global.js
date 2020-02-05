@@ -19,6 +19,10 @@ export default {
         windowHeight() {
             return this.$app.$options.globalData.windowHeight
         },
+        windowWidth() {
+            return this.$app.$options.globalData.windowWidth
+
+        },
         userInfo() {
             return this.$app.$options.globalData.userInfo
         }

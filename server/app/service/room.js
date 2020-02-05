@@ -163,8 +163,15 @@ class RoomService extends Service {
     // 选词
     async pickWord(roomId, word) {
         const { ctx, app } = this;
+        if (!word) {
+            ctx.status = 400;
+            return {
+                msg: '请选词'
+            }
+        }
         const nsp = app.io.of('/');
         let room = await ctx.model.Room.findOne({ roomId });
+
         room.startTime = new Date();
         room.keyWord = word;
         room.status = 'PLAYING'
@@ -197,7 +204,7 @@ class RoomService extends Service {
             type: message.type,
             userId,
         })
-        if (count % 10 === 0) {
+        if (count % 12 === 0) {
             await ctx.model.Content.create({
                 roomId: message.roomId,
                 contentId: count + 1,
@@ -217,12 +224,12 @@ class RoomService extends Service {
     async answerQuest(query) {
         const { ctx, app } = this;
         const nsp = app.io.of('/');
+        let { contentId, roomId, answer } = query
         if (answer === null) {
             return {
                 msg: 'fail'
             }
         }
-        let { contentId, roomId, answer } = query
         let content = await ctx.model.Content.findOne({ roomId, contentId })
         console.log(contentId, roomId, answer)
         content.answer = (['YES', 'NO', 'MAYBE', 'CLOSED', 'UNCLOSED', 'RIGHT'])[answer]
@@ -262,11 +269,20 @@ class RoomService extends Service {
         let wolfEvents = await app.redis.get('wolfEvents')
         wolfEvents = JSON.parse(wolfEvents || '[]')
         let index = wolfEvents.findIndex(e => e.roomId == roomId)
-        wolfEvents.splice(index, 1, {
-            roomId,
-            timestamp: new Date().getTime() + mins * 60 * 1000,
-            event: event
-        })
+        if (index != -1) {
+            wolfEvents.splice(index, 1, {
+                roomId,
+                timestamp: new Date().getTime() + mins * 60 * 1000,
+                event: event
+            })
+        } else {
+            wolfEvents.push({
+                roomId,
+                timestamp: new Date().getTime() + mins * 60 * 1000,
+                event: event
+            })
+        }
+
         await app.redis.set('wolfEvents', JSON.stringify(wolfEvents));
     }
     async updateRoomStatus(roomId, getAnswer) {
@@ -304,6 +320,7 @@ class RoomService extends Service {
         from = mongoose.Types.ObjectId(from);
         to = mongoose.Types.ObjectId(to);
         let room = await ctx.model.Room.findOne({ roomId: roomId })
+        room.votes = room.votes.filter(v => v.from !== from);
         room.votes.push({
             from, to
         })
@@ -319,7 +336,7 @@ class RoomService extends Service {
         }
         // 超过时间的情况下投票完成
         if (!room.getAnswer && room.votes.length >= room.openIds.length) {
-            let MaxVoters = getMaxVoter(room.votes);
+            let MaxVoters = getMaxVoter(room.votes, 'to');
             winerText = room.wolf.findIndex(w => MaxVoters.includes(w.toString())) == -1 ? '狼人获胜' : '好人获胜'
             flag = true;
         }
@@ -342,7 +359,6 @@ class RoomService extends Service {
                     type: 'VOTE',
                     userId: room.votes[index].from,
                 })
-
             }
 
             await ctx.model.Content.create({

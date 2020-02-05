@@ -57,7 +57,7 @@ module.exports.getTime = getTime;
       </view>
     </scroll-view>
     <!-- 输入窗口 -->
-    <view v-if="isPlayer&&roomStatus!='FINISH'" class="cu-bar foot input {{InputBottom!=0?'cur':''}}" style="bottom:{{InputBottom}}px">
+    <view v-if="isPlayer&&roomStatus!='FINISH'&&roomStatus!='NEW'" class="cu-bar foot input {{InputBottom!=0?'cur':''}}" style="bottom:{{InputBottom}}px">
       <view @tap="toggleQuest" class="action">
         <text class="text-green">{{isQuest?'提问':'发言'}}</text>
       </view>
@@ -122,19 +122,26 @@ module.exports.getTime = getTime;
     <!-- 选词窗口 -->
     <view class="cu-modal {{isHeader&&roomStatus=='PICKING'?'show':''}}">
       <view class="cu-dialog padding-sm" catchtap>
-        <radio-group v-model="keyWord" class="block">
+        <view class="cu-bar text-center bg-grey light">
+          <view class="content">请选词</view>
+        </view>
+        <radio-group v-model="keyWordIndex" class="block">
           <view class="cu-list menu text-left">
             <view class="cu-item" v-for="(word,i) in roomInfo.words" :key="i">
               <label class="flex justify-between align-center flex-sub">
-                            <view class="flex-sub">{{word}}</view>
-                            <radio class="round" value="{{word}}"></radio>
-                          </label>
+                      <view class="flex-sub">{{word}}</view>
+                      <radio class="round" checked="{{keyWordIndex==i}}" value="{{i}}"></radio>
+                    </label>
             </view>
           </view>
-          <view class="flex flex-direction padding ">
-            <button @tap="pickWord" class="cu-btn bg-green">确认</button>
+          <view class="cu-form-group solid-top">
+            <input class="text-left" v-model="customInput" placeholder="自定义"></input>
+            <radio class="round" checked="{{keyWordIndex==2}}" value="{{2}}"></radio>
           </view>
         </radio-group>
+        <view class="flex flex-direction padding ">
+          <button @tap="pickWord" class="cu-btn bg-green">确认</button>
+        </view>
       </view>
     </view>
     <!-- 选词loading -->
@@ -153,11 +160,11 @@ module.exports.getTime = getTime;
         <view class="grid col-3 padding-sm">
           <view v-for="i in 6" :key="i" class="padding-xs">
             <button disabled="{{!checkBoxCount[i]}}" @tap="answerObj.answer=i" class="cu-btn orange lg block {{answerObj.answer==i?'bg-orange':'line-orange'}}"> 
-                      {{checkBox[i]}}
-                      <view class="cu-tag sm round {{answerObj.answer==i?'bg-white text-orange':'bg-orange'}}">
-                        {{checkBoxCount[i]}}
-                      </view>
-                    </button>
+                            {{checkBox[i]}}
+                            <view class="cu-tag sm round {{answerObj.answer==i?'bg-white text-orange':'bg-orange'}}">
+                              {{checkBoxCount[i]}}
+                            </view>
+                          </button>
           </view>
         </view>
       </view>
@@ -165,8 +172,8 @@ module.exports.getTime = getTime;
     <!-- 投票 -->
     <view hidden="{{!canVote||voteEd||roomStatus!='VOTEING'}}" class="home-vote">
       <button @tap="modalName='VoteModal'" class="cu-btn lg bg-blue icon">
-                {{roomInfo.getAnswer?'指刀':'投票'}}
-              </button>
+                      {{roomInfo.getAnswer?'指刀':'投票'}}
+                    </button>
     </view>
     <!-- 投票窗口 -->
     <view class="cu-modal {{modalName=='VoteModal'?'show':''}}" @tap="modalName=''">
@@ -175,12 +182,12 @@ module.exports.getTime = getTime;
           <view class="cu-list menu text-left">
             <view class="cu-item" v-for="(user,j) in roomInfo.openIds" :key="j">
               <label class="flex justify-between align-center flex-sub">
-                      <view class="flex-sub">
-                          <view class="cu-avatar round" style="background-image:url({{user.avatarUrl}});"></view>
-                         <text class="text-cut" style="max-width:200rpx;">{{user.nickName}}</text>
-                      </view>
-                      <radio class="round" value="{{user._id}}"></radio>
-                    </label>
+                            <view class="flex-sub">
+                                <view class="cu-avatar round" style="background-image:url({{user.avatarUrl}});"></view>
+                               <text class="text-cut" style="max-width:200rpx;">{{user.nickName}}</text>
+                            </view>
+                            <radio class="round" value="{{user._id}}"></radio>
+                          </label>
             </view>
           </view>
           <view class="flex flex-direction padding ">
@@ -209,6 +216,7 @@ module.exports.getTime = getTime;
   import api from '@/api/api';
   import global from '@/mixins/global';
   import _ from '@/utils/lodash';
+  import tip from '@/utils/tip';
   import {
     answerClass,
     answerText,
@@ -294,10 +302,12 @@ module.exports.getTime = getTime;
       },
     },
     data: {
-      onLine:false,
+      onLine: false,
       isOnload: true,
-      autoScroll:true,
+      autoScroll: true,
       modalName: null,
+      keyWordIndex:0,
+      customInput: '',
       roomId: '',
       MainCur: 0,
       InputBottom: 0,
@@ -362,20 +372,27 @@ module.exports.getTime = getTime;
         this.msgScroll()
         this.caclCheckNum();
       },
-      msgScroll(){
-        if(this.autoScroll){
+      msgScroll() {
+        if (this.autoScroll) {
           this.MainCur = this.contents.length - 1
         }
       },
-      async answerQuest(contentId,answer) {
-        if (this.isHeader&&answer=='NEW'&&this.roomStatus==='PLAYING') {
+      async answerQuest(contentId, answer) {
+        if (this.isHeader && answer == 'NEW' && this.roomStatus === 'PLAYING') {
           this.answerObj.contentId = contentId;
           this.modalName = 'ChooseModal';
         }
       },
       async confirmChoose() {
-        if(this.answerObj.answer===null){
+        if (this.answerObj.answer === null) {
           return
+        } else if (this.answerObj.answer === 5) {
+          let {
+            content
+          } = this.contents.find(c => c.contentId == this.answerObj.contentId)
+          if (content.indexOf(this.roomInfo.keyWord) == -1) {
+            await tip.confirm('答案与咒语不一致，是否确定要结束游戏?', {}, '')
+          }
         }
         let obj = Object.assign({
           roomId: this.roomId
@@ -395,9 +412,18 @@ module.exports.getTime = getTime;
         }
       },
       async pickWord() {
+        let keyWord = this.customInput;
+        if (this.keyWordIndex==2 ) {
+          if(!this.customInput){
+            tip.tips('请填写词汇后确认!');
+            return;
+          }
+        }else{
+          keyWord = this.roomInfo.words[this.keyWordIndex];
+        }
         let res = await api.get('pickWord', {
           roomId: this.roomId,
-          word: this.keyWord
+          word:  keyWord
         });
       },
       async pushVote() {
@@ -421,9 +447,6 @@ module.exports.getTime = getTime;
         });
         let roomInfo = _.get(res, 'data.0') || {}
         this.roomInfo = setRoleName(roomInfo)
-        if (this.roomInfo != 'PLAYING') {
-          this.isQuest = false;
-        }
       },
       caclCheckNum() {
         let questArr = this.contents.filter(c => c.type === 'QUEST');
@@ -481,7 +504,7 @@ module.exports.getTime = getTime;
         }
       },
       createConnect() {
-        const socket = (this.socket = io('https://www.jycais.cn', {
+        const socket = (this.socket = io('http://192.168.88.106:7001', {
           // 实际使用中可以在这里传递参数
           query: {
             room: this.roomId,

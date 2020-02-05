@@ -18,6 +18,14 @@ module.exports = app => {
   router.get('/pickWord', controller.room.pickWord);
   router.get('/answerQuest', controller.room.answerQuest);
   router.get('/pushVote', controller.room.pushVote);
+
+  // 角斗士
+  router.post('/createBlokus', controller.blokus.createBlokus);
+  router.post('/getBlokus', controller.blokus.getBlokus);
+  router.post('/joinBlokus', controller.blokus.joinBlokus);
+  router.post('/startBlokus', controller.blokus.startBlokus);
+  router.post('/updateBlokus', controller.blokus.updateBlokus);
+  router.post('/kickBlokus', controller.blokus.kickBlokus);
   // socket.io
   io.of('/').route('exchange', io.controller.nsp.exchange);
   io.of('/').route('chat', io.controller.nsp.chat);

@@ -20,8 +20,13 @@
         open-type="getUserInfo"
         bindgetuserinfo="tapRoom"
         class="cu-btn bg-red round lg shadow margin-bottom"
-      >房间列表</button>
-      <button style="width:300rpx;" class="cu-btn line-red round lg shadow">游戏介绍</button>
+      >狼人真言</button>
+      <button
+        open-type="getUserInfo"
+        bindgetuserinfo="tapBlokus"
+        style="width:300rpx;"
+        class="cu-btn line-red round lg shadow"
+      >角斗士</button>
     </div>
   </div>
 </template>
@@ -76,8 +81,14 @@ wepy.page({
         console.log('deny');
       }
     },
+    async tapBlokus(e) {
+      await this.onGotUserInfo(e);
+      wx.navigateTo({
+        url: '/pages/blokus/index'
+      });
+    },
     async tapRoom(e) {
-      this.onGotUserInfo(e);
+      await this.onGotUserInfo(e);
       wx.navigateTo({
         url: '/pages/list/index'
       });

@@ -1,0 +1,342 @@
+
+<template>
+  <div class="bg-white flex flex-direction" style="height:{{windowHeight}}px;">
+    <cu-custom
+      :bgColor="currentPlayer"
+      :Custom="Custom"
+      :CustomBar="CustomBar"
+      :StatusBar="StatusBar"
+      isBack="{{true}}"
+    >
+      <view slot="backText">返回</view>
+      <view slot="content">{{currentPlayer}}</view>
+    </cu-custom>
+    <view
+      class="bg-gray light chect-area flex flex-direction"
+      style="height:{{windowWidth }}px;top:{{CustomBar}}px;"
+    >
+      <view>
+        <view v-for="(row,j) in area" :key="j" class="flex-grid col-20 grid-square">
+          <view
+            v-for="(r,i) in row"
+            :key="i"
+            class="solid {{r.className?'bg-'+r.className:'bg-gray light'}}"
+          >{{r.text}}</view>
+        </view>
+      </view>
+    </view>
+    <movable-area style="height: {{windowWidth+6*side}}px; width: 750rpx;flex-shrink:0;">
+      <movable-view
+        v-if="currentIndex>-1"
+        @change="squareChange"
+        @touchend="touchend"
+        style="height:{{currentPiece.height}}px;width:{{currentPiece.width}}px;"
+        x="{{sq.x}}"
+        y="{{sq.y}}"
+        direction="all"
+      >
+        <view
+          style="width:{{currentPiece.width}}px;height:{{currentPiece.height}}px;"
+          class="piece"
+        >
+          <view
+            v-for="(b,j) in currentPiece.arr"
+            :key="j"
+            style="top:{{b[0]*side}}px;left:{{b[1]*side}}px;width:{{side}}px;height:{{side}}px;"
+            class="block bg-pink solid"
+          ></view>
+        </view>
+      </movable-view>
+    </movable-area>
+    <view
+      class="btn-area bg-green light padding"
+      style="top:{{windowWidth+CustomBar}}px;height:{{6*side }}px;padding-right:80rpx;"
+    >
+      <view style="width:100%;height:100%; " class="flex justify-space-between">
+        <view class="flex flex-direction justify-space-around">
+          <button @tap="tapR" class="cu-btn margin-bottom line-green">R</button>
+          <button @tap="tapF" class="cu-btn line-red">F</button>
+        </view>
+        <view class="flex flex-direction justify-space-around">
+          <button @tap="squareInit" class="cu-btn margin-bottom bg-red">取消</button>
+          <button disabled="{{!canSet}}" @tap="setSquare" class="cu-btn bg-green">确认</button>
+        </view>
+      </view>
+      <view class="room-info flex align-center">
+        <view style="width:100%;height:50%;" class="bg-yellow flex align-center border-left-round">
+          <view style="transition: all 0.3s ease-in;transform: rotate(90deg); ">
+            <view class="cuIcon-triangledownfill" style="transform: scale(2.5)"></view>
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="piece-area bg-gray light">
+      <view class="pieces">
+        <view
+          @tap="pieceSelect(i)"
+          style="width:{{p.width}}px;height:{{p.height}}px;"
+          v-for="(p,i) in unSelPieces"
+          :key="i"
+          class="piece"
+        >
+          <view
+            v-for="(b,j) in p.arr"
+            :key="j"
+            style="top:{{b[0]*side}}px;left:{{b[1]*side}}px;width:{{side}}px;height:{{side}}px;"
+            class="block {{currentIndex===i?'bg-red':'bg-pink'}} solid"
+          ></view>
+        </view>
+      </view>
+    </view>
+  </div>
+</template>
+
+<script>
+import wepy from '@wepy/core';
+import global from '@/mixins/global';
+import _ from '@/utils/lodash';
+import {
+  getPieces,
+  drawPiece,
+  makeAreaSquares,
+  check_spaces,
+  check_valid_placement
+} from './piece.js';
+wepy.page({
+  mixins: [global],
+  config: {
+    navigationBarTitleText: 'test'
+  },
+  data: {
+    canSet: false,
+    side: 16,
+    pieces: [],
+    area: [],
+    currentIndex: 0,
+    squarePos: {
+      x: 0,
+      y: 0
+    },
+    // 方块当前的位置
+    sq: {
+      x: 0,
+      y: 0
+    }
+  },
+
+  computed: {
+    unSelPieces() {
+      return this.pieces.filter(p => !p.isSel);
+    },
+    currentPlayer() {
+      let arr = ['red', 'blue', 'green', 'yellow'];
+      return 'bg-' + arr[this.currentIndex % 4];
+    },
+    currentPiece() {
+      if (this.currentIndex + 1 >= this.unSelPieces.length) {
+        this.currentIndex = this.unSelPieces.length - 1;
+      }
+      return this.unSelPieces[this.currentIndex];
+    }
+  },
+  methods: {
+    tapR() {
+      let piece = this.unSelPieces[this.currentIndex];
+      for (var i = 0; i < piece.arr.length; i++) {
+        var c = piece.arr[i];
+        piece.arr[i] = [c[1], piece.height / this.side - 1 - c[0]];
+      }
+      let { width, height } = drawPiece(piece.arr, this.side);
+      piece.width = width;
+      piece.height = height;
+      let index = this.pieces.findIndex(p => p.id == piece.id);
+      this.pieces.splice(index, 1, piece);
+      this.check_is_valid();
+    },
+    tapF() {
+      let piece = this.unSelPieces[this.currentIndex];
+
+      for (var i = 0; i < piece.arr.length; i++) {
+        var c = piece.arr[i];
+        piece.arr[i] = [c[0], piece.width / this.side - 1 - c[1]];
+      }
+      let { width, height } = drawPiece(piece.arr, this.side);
+      piece.width = width;
+      piece.height = height;
+      let index = this.pieces.findIndex(p => p.id == piece.id);
+      this.pieces.splice(index, 1, piece);
+      this.check_is_valid();
+    },
+    pieceSelect(index) {
+      this.currentIndex = index;
+      this.check_is_valid();
+      // this.squareInit();
+    },
+
+    touchend(e) {
+      setTimeout(() => {
+        let { x, y } = this.squarePos;
+        let side = this.side;
+        var f = { top: Math.round(y / side), left: Math.round(x / side) };
+        if (f.top >= 20 || f.left >= 20) {
+          this.squareInit();
+          return;
+        }
+        this.sq = {
+          x: f.left * side,
+          y: f.top * side,
+          left: f.left,
+          top: f.top
+        };
+        this.check_is_valid(f);
+      }, 20);
+    },
+    check_is_valid() {
+      this.canSet = false;
+      let f = this.sq;
+      var flag = false;
+      var global = [];
+      this.currentPiece.arr.forEach(v => {
+        var b = _.get(this.area, `${f.top + v[0]}.${f.left + v[1]}`);
+        global.push([f.top + v[0], f.left + v[1]]);
+        if (!b) {
+          flag = true;
+          return false;
+        }
+        if (b.className) {
+          flag = true;
+          return false;
+        }
+      });
+
+      if (flag) return;
+      // if (!is_turn) return;
+      if (!check_valid_placement(global, this.area)) {
+        return;
+      }
+      this.canSet = true;
+    },
+    // 确认放置的时候 发送socket
+    setSquare() {
+      this.canSet = false;
+      let f = this.sq;
+      let index = Math.round(this.currentPiece.arr.length / 2);
+      this.currentPiece.arr.forEach((v, i) => {
+        if (i == 0) {
+          this.area[f.top + v[0]][f.left + v[1]].text = '12';
+        }
+        this.area[f.top + v[0]][f.left + v[1]].className = 'red';
+      });
+      this.currentPiece.isSel = true;
+      this.squareInit();
+      //
+    },
+    // 方块移动
+    squareChange(e) {
+      let { x, y } = e.$wx.detail;
+      this.squarePos = {
+        x,
+        y
+      };
+    },
+    squareInit() {
+      this.sq = {
+        x: this.side * 2,
+        y: this.windowWidth + this.side
+      };
+    }
+  },
+  onLoad() {
+    this.side = this.windowWidth / 20;
+    let pieces = getPieces(this.side);
+    this.area = makeAreaSquares();
+    this.pieces = pieces;
+    this.squareInit();
+    check_spaces(this.pieces, this.area);
+    console.log(this.area);
+  }
+});
+</script>
+
+<style lang="less">
+.flex-grid {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
+.flex-grid.col-20.grid-square > view {
+  padding-bottom: calc((100%) / 20);
+  height: 0;
+  width: calc((100%) / 20);
+}
+.grid.col-20.grid-square > view:nth-child(20n) {
+  margin-right: 0;
+}
+.grid.col-20 > view {
+  width: 5%;
+}
+.chect-area {
+  position: fixed;
+  width: 750rpx;
+}
+.btn-area {
+  position: fixed;
+  left: 40%;
+  right: 0;
+}
+.room-info {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 40rpx;
+}
+.piece-area {
+  width: 750rpx;
+  overflow: auto;
+  padding: 10rpx;
+  flex: 1;
+}
+.pieces {
+  border-radius: 5px;
+  width: 100%;
+  padding: 10rpx;
+  // min-height: 100px;
+  // width: 1200rpx;
+  .piece {
+    float: left;
+  }
+}
+.piece {
+  position: relative;
+  // float: left;
+  margin-right: 10px;
+  margin-bottom: 10px;
+  .block {
+    position: absolute;
+    margin: 1px;
+    opacity: 0.8;
+  }
+}
+.clearfix:after {
+  content: '.';
+  display: block;
+  clear: both;
+  visibility: hidden;
+  line-height: 0;
+  height: 0;
+}
+.border-left-round {
+  border-top-left-radius: 20rpx;
+  border-bottom-left-radius: 20rpx;
+}
+</style>
+
+
+<config>
+{
+    navigationBarTitleText: '',
+    usingComponents: {
+    }
+}
+</config>

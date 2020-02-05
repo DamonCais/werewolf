@@ -1,0 +1,136 @@
+
+<template>
+  <div>
+    <cu-custom
+      :bgColor="bgColor"
+      :Custom="Custom"
+      :CustomBar="CustomBar"
+      :StatusBar="StatusBar"
+      isBack="{{true}}"
+    >
+      <view slot="backText">返回</view>
+      <view slot="content">房间列表</view>
+    </cu-custom>
+    <view class="cu-bar bg-white solid-bottom sticky" style="top:{{CustomBar}}px;">
+      <view class="action text-bold">
+        <text class="cuIcon-title text-orange"></text>
+        <text class="margin-right">角斗士</text>
+      </view>
+    </view>
+    <view class="cu-list menu">
+      <view
+        @tap="tapJoinBlokus(bloku.blokusId)"
+        v-for="(bloku,i) in blokus"
+        :key="i"
+        class="cu-item arrow"
+      >
+        <view
+          class="cu-avatar round lg margin-right"
+          style="background-image:url({{bloku.openIds[0].avatarUrl}});"
+        ></view>
+        <view class="content">
+          <view class="text-grey">{{bloku.openIds[0].nickName}}</view>
+          <view class="text-grey text-sm">{{bloku.blokusId}}</view>
+        </view>
+        <view class="action">
+          <view class="text-grey text-xs margin-bottom-xs">{{blokuStatus[bloku.status]||'进行中'}}</view>
+          <view class="cu-tag round bg-green sm">{{bloku.openIds.length}}人</view>
+        </view>
+      </view>
+    </view>
+    <!-- 输入窗口 -->
+    <view class="cu-bar foot flex flex-direction">
+      <view style="flex:1;width:100%;" class="padding-sm flex flex-direction">
+        <button class="cu-btn bg-green lg shadow" @tap="createBlokus">创建房间</button>
+      </view>
+    </view>
+  </div>
+</template>
+
+<script>
+import wepy from '@wepy/core';
+import api from '@/api/api';
+import global from '@/mixins/global';
+import Tips from '@/utils/tip';
+wepy.page({
+  mixins: [global],
+  onLoad({ roomId }) {
+    console.log('onLoad', roomId);
+  },
+  // 下拉刷新
+  async onPullDownRefresh() {
+    await this.getBlokus();
+    await wepy.wx.stopPullDownRefresh();
+  },
+  computed: {},
+  onShow() {
+    this.getBlokus();
+  },
+  data: {
+    inputContent: null,
+    modalName: null,
+    showHistory: false,
+    blokus: [],
+    blokuStatus: {
+      NEW: '等待中',
+      FINISH: '已结束'
+    }
+  },
+  methods: {
+    async getBlokus() {
+      let obj = {};
+      let res = await api.post('getBlokus', obj);
+      this.blokus = res.data;
+    },
+    async createBlokus() {
+      let res = await api.post('createBlokus', {
+        openId: this.userInfo.openId
+      });
+      let { blokusId, msg } = res.data;
+      if (msg) {
+        Tips.tips(msg);
+      } else {
+        wx.navigateTo({
+          url: `/pages/bloku/index?blokusId=${blokusId}`
+        });
+      }
+    },
+    async tapJoinBlokus(blokusId) {
+      let res = await api.post('joinBlokus', {
+        openId: this.userInfo.openId,
+        blokusId: blokusId
+      });
+      wx.navigateTo({
+        url: `/pages/bloku/index?blokusId=${blokusId}`
+      });
+      // await this.getBlokus();
+    }
+  }
+});
+</script>
+
+<style lang="less">
+page {
+  padding-bottom: 100rpx;
+}
+.main {
+  max-width: calc(100% - 120rpx);
+}
+.sticky {
+  /* height: 92rpx; */
+  position: sticky;
+  position: -webkit-sticky;
+  /*  */
+  z-index: 1000;
+}
+</style>
+  
+
+<config>
+{
+    navigationBarTitleText: 'WePY 2.0 Feature Demo',
+    enablePullDownRefresh: true,
+    usingComponents: {
+    }
+}
+</config>
