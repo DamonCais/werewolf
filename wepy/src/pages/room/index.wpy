@@ -504,7 +504,7 @@ module.exports.getTime = getTime;
         }
       },
       createConnect() {
-        const socket = (this.socket = io('http://192.168.88.106:7001', {
+        const socket = (this.socket = io('https://www.jycais.cn', {
           // 实际使用中可以在这里传递参数
           query: {
             room: this.roomId,

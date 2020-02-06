@@ -2,7 +2,7 @@ import {
     wxRequest
 } from '@/utils/wxRequest'
 
-const baseUrl = 'http://192.168.88.106:7001/'
+const baseUrl = 'https://www.jycais.cn/'
 // http://jvs.juvending.cn/api/sys/Get_VersionList?ver=0.00&token=00001iloveyouruo
 
 const get = (url, params) => {
