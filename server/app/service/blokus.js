@@ -127,9 +127,8 @@ class BlokusService extends Service {
                 blokus.currentPlayer = blokus.score[(index + i) % 4].userId;
                 break;
             } else if (i == 4) {
-                return {
-                    msg: 'gameOver'
-                }
+                blokus.status = 'FINISH'
+                blokus.currentPlayer = '';
             }
         }
 
